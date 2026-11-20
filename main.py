@@ -15,6 +15,7 @@ import hashlib
 import os
 import struct
 import sys
+import zlib
 
 EDITION = "Friday 20 November 2026"
 STORIES = 38
@@ -56,11 +57,16 @@ def image_info(path):
     header is truncated.
     """
     with open(path, "rb") as fh:
-        head = fh.read(24)
+        head = fh.read(33)
         if head.startswith(PNG_SIGNATURE):
-            if len(head) < 24 or head[12:16] != b"IHDR":
+            if len(head) < 33 or head[12:16] != b"IHDR":
                 raise ValueError("entry.png has a truncated PNG header")
             width, height = struct.unpack(">II", head[16:24])
+            (stored_crc,) = struct.unpack(">I", head[29:33])
+            if (zlib.crc32(head[12:29]) & 0xFFFFFFFF) != stored_crc:
+                raise ValueError(
+                    "entry.png has a corrupt PNG IHDR chunk "
+                    "(CRC-32 mismatch)")
             return "PNG", width, height
         if not head.startswith(JPEG_SIGNATURE):
             raise ValueError("entry.png is neither PNG nor JPEG")
